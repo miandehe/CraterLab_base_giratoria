@@ -19,13 +19,18 @@ Thread sensorThread;
 #define CONTINUOUS 2
 #define ANGLE_MODE 3
 
-int axis_y_angle = 0;
-unsigned long time_axis_y_angle = 10000;
-int axis_x_angle = 0;
-unsigned long time_axis_x_angle = 10000;
-int axis_a_angle = 0;
-unsigned long time_axis_a_angle = 10000;
 
+// Dispositivo 360
+int x0Degrees = 0;
+unsigned long x0Duration = 10000;
+int x1Degrees = 0;
+unsigned long x1Duration = 10000;
+int y0Degrees = 0;
+unsigned long y0Duration = 10000;
+bool syncx0WithInterval360 = false;
+bool syncx1WithInterval360 = false;
+bool syncy0WithInterval360 = false;
+bool isAction[3] = {false, false, false};
 int mode = STOP;
 
 
@@ -118,41 +123,44 @@ float axis_angle_ant[3] = {0,0,0};
 
 void search_angle(int axis, int angle, unsigned long time_initial, unsigned long time_final)
   {
-    axis_angle[axis] = angleRead(axis);
-    if((axis_angle[axis]>((float)angle+RESOLUTION_ANGLE))||(axis_angle[axis]<((float)angle-RESOLUTION_ANGLE)))
+    if(isAction[axis])
       {
-        if (axis_angle_ant[axis]!=axis_angle[axis])
+        axis_angle[axis] = angleRead(axis);
+        if((axis_angle[axis]>((float)angle+RESOLUTION_ANGLE))||(axis_angle[axis]<((float)angle-RESOLUTION_ANGLE)))
           {
-            RPC.print(axis_angle[axis]);
-            RPC.print(" ");
-            RPC.println(angle);
-            axis_angle_ant[axis] = axis_angle[axis];
+            if (axis_angle_ant[axis]!=axis_angle[axis])
+              {
+                RPC.print(axis_angle[axis]);
+                RPC.print(" ");
+                RPC.println(angle);
+                axis_angle_ant[axis] = axis_angle[axis];
+              }
+            if (flag_search[axis])
+              {
+                flag_search[axis] = false;
+                RPC.print(axis_angle[axis]);
+                RPC.print(" ");
+                RPC.print(angle);
+                if (axis_angle[axis]<(angle + RESOLUTION_ANGLE)) direction[axis] = RIGHT;
+                else direction[axis] = LEFT;
+                if ((abs(axis_angle[axis])>360)||(abs(angle)>360))enable_zero[axis] = false;
+                else enable_zero[axis] = true;
+                if((axis==y_axis)||(axis==a_axis)) direction[axis]=!direction[axis];
+                digitalWrite(DIRP[axis], direction[axis]);
+                if (axis!=a_axis) axis_pulses[axis] = map(abs(angle-axis_angle[axis]), 0, 359, 0, PULSE_REV*REDUCTION_XY);
+                else axis_pulses[axis] = map(abs(angle-axis_angle[axis]), 0, 359, 0, PULSE_REV*REDUCTION_A);
+                time_pulse[axis] = ((1000/2)*(time_final-time_initial)/axis_pulses[axis]); //1000 es conversion de milisegundos a microsegundos entre dos porque es tiempo de 0 a 1
+                if((time_pulse[axis]<TIME_PULSE_XY)&&(axis<=y_axis)) time_pulse[axis]=TIME_PULSE_XY;
+                else if((time_pulse[axis]<TIME_PULSE_A)&&(axis==a_axis)) time_pulse[axis]=TIME_PULSE_A;
+                RPC.print(" ");
+                RPC.print(axis_pulses[axis]);
+                RPC.print(" ");
+                RPC.println(time_pulse[axis]);
+                flag_refresh[axis] = true;
+              }
           }
-        if (flag_search[axis])
-          {
-            flag_search[axis] = false;
-            RPC.print(axis_angle[axis]);
-            RPC.print(" ");
-            RPC.print(angle);
-            if (axis_angle[axis]<(angle + RESOLUTION_ANGLE)) direction[axis] = RIGHT;
-            else direction[axis] = LEFT;
-            if ((abs(axis_angle[axis])>360)||(abs(angle)>360))enable_zero[axis] = false;
-            else enable_zero[axis] = true;
-            if((axis==y_axis)||(axis==a_axis)) direction[axis]=!direction[axis];
-            digitalWrite(DIRP[axis], direction[axis]);
-            if (axis!=a_axis) axis_pulses[axis] = map(abs(angle-axis_angle[axis]), 0, 359, 0, PULSE_REV*REDUCTION_XY);
-            else axis_pulses[axis] = map(abs(angle-axis_angle[axis]), 0, 359, 0, PULSE_REV*REDUCTION_A);
-            time_pulse[axis] = ((1000/2)*(time_final-time_initial)/axis_pulses[axis]); //1000 es conversion de milisegundos a microsegundos entre dos porque es tiempo de 0 a 1
-            if((time_pulse[axis]<TIME_PULSE_XY)&&(axis<=y_axis)) time_pulse[axis]=TIME_PULSE_XY;
-            else if((time_pulse[axis]<TIME_PULSE_A)&&(axis==a_axis)) time_pulse[axis]=TIME_PULSE_A;
-            RPC.print(" ");
-            RPC.print(axis_pulses[axis]);
-            RPC.print(" ");
-            RPC.println(time_pulse[axis]);
-            flag_refresh[axis] = true;
-          }
+        else if((axis_angle[axis]<=((float)angle+RESOLUTION_ANGLE))&&(axis_angle[axis]>=((float)angle-RESOLUTION_ANGLE))) flag_refresh[axis] = false;
       }
-    else if((axis_angle[axis]<=((float)angle+RESOLUTION_ANGLE))&&(axis_angle[axis]>=((float)angle-RESOLUTION_ANGLE))) flag_refresh[axis] = false;
   }
 
 unsigned long time_refresh_x = micros();
@@ -278,45 +286,84 @@ void RPCRead()
           digitalWrite(LED_BUILTIN, LOW);
           if (inputString_rpc.startsWith("/axisA:")) //Interval Motor
             {
-              int* value = decode_values(inputString_rpc, 3);
+              int* value = decode_values(inputString_rpc, 4);
               #if DEBUG_M4
                 RPC.print("Recibido axis M4: ");
                 RPC.println(inputString_rpc);
-                for(int i=0; i<3; i++) RPC.println(value[i]);
+                for(int i=0; i<4; i++) RPC.println(value[i]);
               #endif
-              axis_a_angle = value[0];
-              time_axis_a_angle = value[1]*1000;
+              x0Degrees = value[0];
+              x0Duration = value[1]*1000;
+              syncx0WithInterval360 = value[2];
               mode = ANGLE_MODE;
-              flag_search[a_axis] = true;
-              time_axis[a_axis] = millis();
+              if(!value[3]) //Save or test
+                {
+                  isAction[a_axis] = true;
+                  flag_search[a_axis] = true;
+                  time_axis[a_axis] = millis();
+                }
             }
           else if (inputString_rpc.startsWith("/axisX:")) //Interval Motor
             {
-              int* value = decode_values(inputString_rpc, 3);
+              int* value = decode_values(inputString_rpc, 4);
               #if DEBUG_M4
                 RPC.print("Recibido axis M4: ");
                 RPC.println(inputString_rpc);
-                for(int i=0; i<3; i++) RPC.println(value[i]);
+                for(int i=0; i<4; i++) RPC.println(value[i]);
               #endif
-              axis_x_angle = value[0];
-              time_axis_x_angle = value[1]*1000;
+              x1Degrees = value[0];
+              x1Duration = value[1]*1000;
+              syncx1WithInterval360 = value[2];
               mode = ANGLE_MODE;
-              flag_search[x_axis] = true;
-              time_axis[x_axis] = millis();
+              if(!value[3]) //Save or test
+                {
+                  isAction[x_axis] = true;
+                  flag_search[x_axis] = true;
+                  time_axis[x_axis] = millis();
+                }
             }
           else if (inputString_rpc.startsWith("/axisY:")) //Interval Motor
             {
-              int* value = decode_values(inputString_rpc, 3);
+              int* value = decode_values(inputString_rpc, 4);
               #if DEBUG_M4
                 RPC.print("Recibido axis M4: ");
                 RPC.println(inputString_rpc);
-                for(int i=0; i<3; i++) RPC.println(value[i]);
+                for(int i=0; i<4; i++) RPC.println(value[i]);
               #endif
-              axis_y_angle = value[0];
-              time_axis_y_angle = value[1]*1000;;
+              y0Degrees = value[0];
+              y0Duration = value[1]*1000;
+              syncy0WithInterval360 = value[2];
               mode = ANGLE_MODE;
-              flag_search[y_axis] = true;
-              time_axis[y_axis] = millis();
+              if(!value[3]) //Save or test
+                {
+                  isAction[y_axis] = true;
+                  flag_search[y_axis] = true;
+                  time_axis[y_axis] = millis();
+                }
+            }
+          else if (inputString_rpc.startsWith("/action:")) //Interval Motor
+            {
+              int* value = decode_values(inputString_rpc, 1);
+              #if DEBUG_M4
+                RPC.print("Recibido action M4: ");
+                RPC.println(inputString_rpc);
+                for(int i=0; i<1; i++) RPC.println(value[i]);
+              #endif
+              if (value[0])
+              {
+                for(int i=0; i<3; i++)
+                {
+                  isAction[i] = true;
+                  flag_search[i] = true;
+                  time_axis[i] = millis();
+                }
+              }
+              else
+                for(int i=0; i<3; i++) 
+                  {
+                    isAction[i] = false;
+                    flag_refresh[i] = false;
+                  }
             }
           inputString_rpc = String();
           digitalWrite(LED_BUILTIN, HIGH);
@@ -366,8 +413,8 @@ void setup() {
 }
 
 void loop() {
-  search_angle(a_axis, axis_a_angle, 0, time_axis_a_angle);
-  search_angle(x_axis, axis_x_angle, 0, time_axis_x_angle);
-  search_angle(y_axis, axis_y_angle, 0, time_axis_y_angle);
+  search_angle(a_axis, x0Degrees, 0, x0Duration);
+  search_angle(x_axis, x1Degrees, 0, x1Duration);
+  search_angle(y_axis, y0Degrees, 0, y0Duration);
   refresh_steppers();
 }

@@ -11,15 +11,12 @@ Thread sensorThread;
 
 #if WIFI
   #include <WiFi.h>
-  #include <web_page.html>
   char ssid[] = "Analogue_Hyperlapse_Camera";        // your network SSID (name)
   char password[] = "CraterLab";    // your network password (use for WPA, or use as key for WEP)
   IPAddress ip(192, 168, 8, 3);
   IPAddress gateway(192, 168, 8, 1);
   IPAddress subnet(255, 255, 255, 0);
-  IPAddress dns(192, 168, 8, 1); //primaryDNS
-  WiFiServer httpServer(80);
-  // for ArduinoOSC
+  IPAddress dns(8, 8, 8, 8); //primaryDNS
 #endif
 
 #define command Serial2
@@ -145,6 +142,7 @@ void SerialRead()
            if (inputString.startsWith("/axisA:")) RPC.println(inputString);
            else if (inputString.startsWith("/axisX:")) RPC.println(inputString);
            else if (inputString.startsWith("/axisY:")) RPC.println(inputString);
+           else if (inputString.startsWith("/action:")) RPC.println(inputString);
            inputString = String();
          }
          else
@@ -205,7 +203,6 @@ void setup() {
       Serial.print(".");
     }
   #endif
-    httpServer.begin();
     // you're connected now, so print out the status:
     printWifiStatus();
   #else
@@ -219,8 +216,6 @@ void setup() {
 }
 
 void loop() {
-
-  #if WIFI  
     SerialRead();
 
     String buffer = "";
@@ -236,122 +231,4 @@ void loop() {
       Serial.print(buffer);
 
     }
-
-    //Serial.println(WiFi.status());
-    WiFiClient client = httpServer.available();
-
-     if (client) {                             // if you get a client,
-    //Serial.println("new client");           // print a message out the serial port
-    String currentLine = "";                // make a String to hold incoming data from the client
-    while (client.connected()) {            // loop while the client's connected
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        //Serial.write(c);                    // print it out the serial monitor
-        if (c == '\n') {                    // if the byte is a newline character
-
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
-          if (currentLine.length() == 0) {
-
-            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-            // and a content-type so the client knows what's coming, then a blank line:
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-Type: text/html");
-            client.println("Connection: close");  // the connection will be closed after completion of the response
-            client.println("Refresh: 0.025");  // refresh the page automatically every 5 sec
-            client.println();
-            client.println("<!DOCTYPE HTML>");
-            client.println("<html>");
-            // output the value of each analog input pin
-           
-            //create the buttons
-            client.print("Click <a href=\"/L0\">here</a> to move lineal motor 0%<br>");
-            client.print("Click <a href=\"/L50\">here</a> to move lineal motor 50%<br>");
-            client.print("Click <a href=\"/L100\">here</a> to move lineal motor 100%<br><br>");
-
-            client.print("Click <a href=\"/REC_START\">here</a> to record video<br>");
-            client.print("Click <a href=\"/REC_STOP\">here</a> to stop record video<br><br>");
-
-            client.print("Click <a href=\"/ZERO\">here</a> for initial position<br>");
-            client.print("Click <a href=\"/PRESET\">here</a> for movement in automatic mode<br>");
-            client.print("Click <a href=\"/AUTO\">here</a> for movement in automatic mode<br>");
-            client.print("Click <a href=\"/STOP\">here</a> for stop movement in automatic mode<br><br>");
-            
-            for (int axis = 0; axis < 3; axis++) {
-                int sensorReading = Motor_axis[axis];
-                float reduction = REDUCTION_XY;
-                if (axis==2) reduction = REDUCTION_A;
-                client.print("Axis ");
-                client.print(axis_c[axis]);
-                client.print(" is ");
-                client.print(360*sensorReading/(reduction*PULSE_REV));
-                client.println("<br />");
-              }
-              client.println("</html>");
-              break;
-          }
-          else {      // if you got a newline, then clear currentLine:
-            currentLine = "";
-          }
-        }
-        else if (c != '\r') {    // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
-        }
-
-        if (currentLine.endsWith("GET /L0")) {
-          command.println("/p_motor:0,0"); //Motor number, % position    
-        }
-        if (currentLine.endsWith("GET /L50")) {
-          command.println("/p_motor:0,50"); //Motor number, % position    
-        }
-        if (currentLine.endsWith("GET /L100")) {
-          command.println("/p_motor:0,100"); //Motor number, % position     
-        }
-        if (currentLine.endsWith("GET /REC_START")) {
-          //command.println("/stepper:1,1,24"); //Stepper number, mode(0:LEFT, 1:RIGHT, 2:ONE TURN LEFT, 3:ONE TURN RIGHT), fps     
-          command.println("/s_motor:4,1,24"); //motor number, mode(0:LEFT, 1:RIGHT, 2:ONE TURN LEFT, 3:ONE TURN RIGHT), fps     
-        }
-        if (currentLine.endsWith("GET /REC_STOP")) {
-          //command.println("/stepper:1,1,0"); //Stepper number, mode(0:LEFT, 1:RIGHT, 2:ONE TURN LEFT, 3:ONE TURN RIGHT,), fps     
-          command.println("/s_motor:4,1,0"); //motor number, mode(0:LEFT, 1:RIGHT, 2:ONE TURN LEFT, 3:ONE TURN RIGHT), fps     
-        }
-        if (currentLine.endsWith("GET /ZERO")) {
-          if (mode!=ZERO)
-            {
-              mode = ZERO;  
-              RPC.println("/mode:"+ String(mode));   
-            }
-        }
-        if (currentLine.endsWith("GET /PRESET")) {
-          if (mode!=ANGLE_MODE)
-            {
-              mode = ANGLE_MODE;  
-              RPC.println("/mode:"+ String(mode));   
-            }
-        }
-        if (currentLine.endsWith("GET /AUTO")) {
-          if (mode!=CONTINUOUS)
-            {
-              mode = CONTINUOUS;  
-              RPC.println("/mode:"+ String(mode));   
-            }
-        }
-        if (currentLine.endsWith("GET /STOP")) {
-          if (mode!=STOP)
-            {
-              mode = STOP;  
-              RPC.println("/mode:"+ String(mode));   
-            }
-        }
-
-      }
-    }
-      // give the web browser time to receive the data
-      //delay(1);
-
-      // close the connection:
-      client.stop();
-      //Serial.println("client disconnected");
-    }
-  #endif
 }
