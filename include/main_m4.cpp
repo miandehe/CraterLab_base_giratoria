@@ -1,16 +1,15 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <RPC.h>
-
-#define DEBUG_M4 true
+#include <constants.h>
 
 using namespace rtos;
 
 Thread sensorThread;
 
-#define x_axis 0
-#define y_axis 1
-#define a_axis 2
+#define x1_axis 0
+#define y0_axis 1
+#define x0_axis 2
 
 #define RIGHT false
 #define LEFT true
@@ -40,16 +39,6 @@ int mode = STOP;
       #define debug RPC 
 #endif
 
-
-int EN[3] = {10, 7, 4};
-int DIRP[3] = {9, 6, 3};
-int PUL[3] = {8, 5, 2};
-int FC[3] = {51, 53, 49}; 
-
-#define PULSE_REV 400
-#define REDUCTION_XY 5
-#define REDUCTION_A 60
-
 #define TIME_PULSE_XY 2500
 #define TIME_PULSE_A 500
 
@@ -60,32 +49,32 @@ bool enable_zero[3] = {true, true, true};
 
 void search_zero()
   {
-    time_fc_zero[x_axis] = millis();
-    while(digitalRead(FC[x_axis])||((millis()-time_fc_zero[x_axis])<10))
+    time_fc_zero[x1_axis] = millis();
+    while(digitalRead(FC[x1_axis])||((millis()-time_fc_zero[x1_axis])<10))
       {
-        digitalWrite(PUL[x_axis], HIGH);
+        digitalWrite(PUL[x1_axis], HIGH);
         delayMicroseconds(2000);
-        digitalWrite(PUL[x_axis], LOW);
+        digitalWrite(PUL[x1_axis], LOW);
         delayMicroseconds(2000);
-        if(digitalRead(FC[x_axis])) time_fc_zero[x_axis] = millis();
+        if(digitalRead(FC[x1_axis])) time_fc_zero[x1_axis] = millis();
       }
-    time_fc_zero[y_axis] = millis();
-    while(digitalRead(FC[y_axis])||((millis()-time_fc_zero[y_axis])<10))
+    time_fc_zero[y0_axis] = millis();
+    while(digitalRead(FC[y0_axis])||((millis()-time_fc_zero[y0_axis])<10))
       {
-        digitalWrite(PUL[y_axis], HIGH);
+        digitalWrite(PUL[y0_axis], HIGH);
         delayMicroseconds(2000);
-        digitalWrite(PUL[y_axis], LOW);
+        digitalWrite(PUL[y0_axis], LOW);
         delayMicroseconds(2000);
-        if(digitalRead(FC[y_axis])) time_fc_zero[y_axis] = millis();
+        if(digitalRead(FC[y0_axis])) time_fc_zero[y0_axis] = millis();
       };
-    time_fc_zero[a_axis] = millis();
-    while(digitalRead(FC[a_axis])||((millis()-time_fc_zero[a_axis])<10))
+    time_fc_zero[x0_axis] = millis();
+    while(digitalRead(FC[x0_axis])||((millis()-time_fc_zero[x0_axis])<10))
       {
-        digitalWrite(PUL[a_axis], HIGH);
+        digitalWrite(PUL[x0_axis], HIGH);
         delayMicroseconds(250);
-        digitalWrite(PUL[a_axis], LOW);
+        digitalWrite(PUL[x0_axis], LOW);
         delayMicroseconds(250);
-        if(digitalRead(FC[a_axis])) time_fc_zero[a_axis] = millis();
+        if(digitalRead(FC[x0_axis])) time_fc_zero[x0_axis] = millis();
       }
   }
 
@@ -130,32 +119,38 @@ void search_angle(int axis, int angle, unsigned long time_initial, unsigned long
           {
             if (axis_angle_ant[axis]!=axis_angle[axis])
               {
-                RPC.print(axis_angle[axis]);
-                RPC.print(" ");
-                RPC.println(angle);
+                #if DEBUG_M4
+                  RPC.print(axis_angle[axis]);
+                  RPC.print(" ");
+                  RPC.println(angle);
+                #endif
                 axis_angle_ant[axis] = axis_angle[axis];
               }
             if (flag_search[axis])
               {
                 flag_search[axis] = false;
-                RPC.print(axis_angle[axis]);
-                RPC.print(" ");
-                RPC.print(angle);
+                #if DEBUG_M4
+                  RPC.print(axis_angle[axis]);
+                  RPC.print(" ");
+                  RPC.print(angle);
+                #endif
                 if (axis_angle[axis]<(angle + RESOLUTION_ANGLE)) direction[axis] = RIGHT;
                 else direction[axis] = LEFT;
                 if ((abs(axis_angle[axis])>360)||(abs(angle)>360))enable_zero[axis] = false;
                 else enable_zero[axis] = true;
-                if((axis==y_axis)||(axis==a_axis)) direction[axis]=!direction[axis];
+                if((axis==y0_axis)||(axis==x0_axis)) direction[axis]=!direction[axis];
                 digitalWrite(DIRP[axis], direction[axis]);
-                if (axis!=a_axis) axis_pulses[axis] = map(abs(angle-axis_angle[axis]), 0, 359, 0, PULSE_REV*REDUCTION_XY);
+                if (axis!=x0_axis) axis_pulses[axis] = map(abs(angle-axis_angle[axis]), 0, 359, 0, PULSE_REV*REDUCTION_XY);
                 else axis_pulses[axis] = map(abs(angle-axis_angle[axis]), 0, 359, 0, PULSE_REV*REDUCTION_A);
                 time_pulse[axis] = ((1000/2)*(time_final-time_initial)/axis_pulses[axis]); //1000 es conversion de milisegundos a microsegundos entre dos porque es tiempo de 0 a 1
-                if((time_pulse[axis]<TIME_PULSE_XY)&&(axis<=y_axis)) time_pulse[axis]=TIME_PULSE_XY;
-                else if((time_pulse[axis]<TIME_PULSE_A)&&(axis==a_axis)) time_pulse[axis]=TIME_PULSE_A;
-                RPC.print(" ");
-                RPC.print(axis_pulses[axis]);
-                RPC.print(" ");
-                RPC.println(time_pulse[axis]);
+                if((time_pulse[axis]<TIME_PULSE_XY)&&(axis<=y0_axis)) time_pulse[axis]=TIME_PULSE_XY;
+                else if((time_pulse[axis]<TIME_PULSE_A)&&(axis==x0_axis)) time_pulse[axis]=TIME_PULSE_A;
+                #if DEBUG_M4
+                  RPC.print(" ");
+                  RPC.print(axis_pulses[axis]);
+                  RPC.print(" ");
+                  RPC.println(time_pulse[axis]);
+                #endif
                 flag_refresh[axis] = true;
               }
           }
@@ -171,36 +166,36 @@ bool state_y = false;
 bool state_a = false;
 void refresh_steppers()
   {
-    if(((micros()-time_refresh_x)>=time_pulse[x_axis])&&(flag_refresh[x_axis]))
+    if(((micros()-time_refresh_x)>=time_pulse[x1_axis])&&(flag_refresh[x1_axis]))
       {
         time_refresh_x = micros();
-        digitalWrite(PUL[x_axis], state_x);
+        digitalWrite(PUL[x1_axis], state_x);
         if(state_x) 
           {
-            if (direction[x_axis]==RIGHT) angle_pulses[x_axis]++;
-            else angle_pulses[x_axis]--;
+            if (direction[x1_axis]==RIGHT) angle_pulses[x1_axis]++;
+            else angle_pulses[x1_axis]--;
           }
         state_x = !state_x;      
       }
-    if(((micros()-time_refresh_y)>=time_pulse[y_axis])&&(flag_refresh[y_axis]))
+    if(((micros()-time_refresh_y)>=time_pulse[y0_axis])&&(flag_refresh[y0_axis]))
       {
         time_refresh_y = micros();
-        digitalWrite(PUL[y_axis], state_y);
+        digitalWrite(PUL[y0_axis], state_y);
         if(state_y) 
           {
-            if (direction[y_axis]==LEFT) angle_pulses[y_axis]++;
-            else angle_pulses[y_axis]--;
+            if (direction[y0_axis]==LEFT) angle_pulses[y0_axis]++;
+            else angle_pulses[y0_axis]--;
           }
         state_y = !state_y;
       }
-    if(((micros()-time_refresh_a)>=time_pulse[a_axis])&&(flag_refresh[a_axis]))
+    if(((micros()-time_refresh_a)>=time_pulse[x0_axis])&&(flag_refresh[x0_axis]))
       {
         time_refresh_a = micros();
-        digitalWrite(PUL[a_axis], state_a);
+        digitalWrite(PUL[x0_axis], state_a);
         if(state_a)
           {
-            if (direction[a_axis]==LEFT) angle_pulses[a_axis]++;
-            else angle_pulses[a_axis]--;
+            if (direction[x0_axis]==LEFT) angle_pulses[x0_axis]++;
+            else angle_pulses[x0_axis]--;
           } 
         state_a = !state_a;
       }
@@ -212,29 +207,29 @@ long startTimey = 0;
 long startTimea = 0;
 const int timeThreshold = 500;
 
-void f_x_axis(){ //Funcion de paso por cero de la interrupcion del eje x
-   if (((millis() - startTimex) > timeThreshold)&&(enable_zero[x_axis]))
+void f_x1_axis(){ //Funcion de paso por cero de la interrupcion del eje x
+   if (((millis() - startTimex) > timeThreshold)&&(enable_zero[x1_axis]))
     {
-      if(angle_pulses[x_axis]>0) angle_pulses_MAX[x_axis] = angle_pulses[x_axis]; //Varaible de pulsos maximos por vuelta
-      angle_pulses[x_axis] = 0; //Varaible temporal de pulsos 
+      if(angle_pulses[x1_axis]>0) angle_pulses_MAX[x1_axis] = angle_pulses[x1_axis]; //Varaible de pulsos maximos por vuelta
+      angle_pulses[x1_axis] = 0; //Varaible temporal de pulsos 
       startTimex = millis();
     }
   }
 
-void f_y_axis(){ //Funcion de paso por cero de la interrupcion del eje y
-   if (((millis() - startTimey) > timeThreshold)&&(enable_zero[y_axis]))
+void f_y0_axis(){ //Funcion de paso por cero de la interrupcion del eje y
+   if (((millis() - startTimey) > timeThreshold)&&(enable_zero[y0_axis]))
     {
-      if(angle_pulses[y_axis]>0) angle_pulses_MAX[y_axis] = angle_pulses[y_axis]; //Varaible de pulsos maximos por vuelta
-      angle_pulses[y_axis] = 0; //Varaible temporal de pulsos 
+      if(angle_pulses[y0_axis]>0) angle_pulses_MAX[y0_axis] = angle_pulses[y0_axis]; //Varaible de pulsos maximos por vuelta
+      angle_pulses[y0_axis] = 0; //Varaible temporal de pulsos 
       startTimey = millis();
     }
   }
 
-void f_a_axis(){ //Funcion de paso por cero de la interrupcion del eje a
-   if (((millis() - startTimea) > timeThreshold)&&(enable_zero[a_axis]))
+void f_x0_axis(){ //Funcion de paso por cero de la interrupcion del eje a
+   if (((millis() - startTimea) > timeThreshold)&&(enable_zero[x0_axis]))
     {
-      if(angle_pulses[a_axis]>0) angle_pulses_MAX[a_axis] = angle_pulses[a_axis]; //Varaible de pulsos maximos por vuelta
-      angle_pulses[a_axis] = 0; //Varaible temporal de pulsos 
+      if(angle_pulses[x0_axis]>0) angle_pulses_MAX[x0_axis] = angle_pulses[x0_axis]; //Varaible de pulsos maximos por vuelta
+      angle_pulses[x0_axis] = 0; //Varaible temporal de pulsos 
       startTimea = millis();
     }
   } 
@@ -244,17 +239,17 @@ void f_a_axis(){ //Funcion de paso por cero de la interrupcion del eje a
 Functions on the M4 that returns axis
 */
 int AxisA_Read() {
-  int result = angle_pulses[a_axis];
+  int result = angle_pulses[x0_axis];
   return result;
 }
 
 int AxisX_Read() {
-  int result = angle_pulses[x_axis];
+  int result = angle_pulses[x1_axis];
   return result;
 }
 
 int AxisY_Read() {
-  int result = angle_pulses[y_axis];
+  int result = angle_pulses[y0_axis];
   return result;
 }
 
@@ -298,9 +293,9 @@ void RPCRead()
               mode = ANGLE_MODE;
               if(!value[3]) //Save or test
                 {
-                  isAction[a_axis] = true;
-                  flag_search[a_axis] = true;
-                  time_axis[a_axis] = millis();
+                  isAction[x0_axis] = true;
+                  flag_search[x0_axis] = true;
+                  time_axis[x0_axis] = millis();
                 }
             }
           else if (inputString_rpc.startsWith("/axisX:")) //Interval Motor
@@ -317,9 +312,9 @@ void RPCRead()
               mode = ANGLE_MODE;
               if(!value[3]) //Save or test
                 {
-                  isAction[x_axis] = true;
-                  flag_search[x_axis] = true;
-                  time_axis[x_axis] = millis();
+                  isAction[x1_axis] = true;
+                  flag_search[x1_axis] = true;
+                  time_axis[x1_axis] = millis();
                 }
             }
           else if (inputString_rpc.startsWith("/axisY:")) //Interval Motor
@@ -336,9 +331,9 @@ void RPCRead()
               mode = ANGLE_MODE;
               if(!value[3]) //Save or test
                 {
-                  isAction[y_axis] = true;
-                  flag_search[y_axis] = true;
-                  time_axis[y_axis] = millis();
+                  isAction[y0_axis] = true;
+                  flag_search[y0_axis] = true;
+                  time_axis[y0_axis] = millis();
                 }
             }
           else if (inputString_rpc.startsWith("/action:")) //Interval Motor
@@ -393,14 +388,14 @@ void setup() {
     }
   for(int i=0; i<3; i++) pinMode(FC[i], INPUT_PULLUP);
   search_zero();
-  delay(1000);
-  attachInterrupt(digitalPinToInterrupt(FC[x_axis]), f_x_axis, FALLING);
-  attachInterrupt(digitalPinToInterrupt(FC[y_axis]), f_y_axis, FALLING);
-  attachInterrupt(digitalPinToInterrupt(FC[a_axis]), f_a_axis, FALLING);
+  //delay(10000);
+  attachInterrupt(digitalPinToInterrupt(FC[x1_axis]), f_x1_axis, FALLING);
+  attachInterrupt(digitalPinToInterrupt(FC[y0_axis]), f_y0_axis, FALLING);
+  attachInterrupt(digitalPinToInterrupt(FC[x0_axis]), f_x0_axis, FALLING);
 
-  flag_refresh[y_axis]=false;
-  flag_refresh[x_axis]=false;
-  flag_refresh[a_axis]=false;
+  flag_refresh[y0_axis]=false;
+  flag_refresh[x1_axis]=false;
+  flag_refresh[x0_axis]=false;
 
   //Bind the sensorRead() function on the M4
   RPC.bind("AxisA", AxisA_Read);
@@ -409,12 +404,13 @@ void setup() {
   /*
   Starts a new thread that loops the requestReading() function
   */
-  sensorThread.start(requestReading);
+  //sensorThread.start(requestReading);
 }
 
 void loop() {
-  search_angle(a_axis, x0Degrees, 0, x0Duration);
-  search_angle(x_axis, x1Degrees, 0, x1Duration);
-  search_angle(y_axis, y0Degrees, 0, y0Duration);
+  search_angle(x0_axis, x0Degrees, 0, x0Duration);
+  search_angle(x1_axis, x1Degrees, 0, x1Duration);
+  search_angle(y0_axis, y0Degrees, 0, y0Duration);
   refresh_steppers();
+  RPCRead();
 }
