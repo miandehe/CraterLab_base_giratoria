@@ -114,49 +114,59 @@ const char *htmlTemplate = R"rawliteral(
 </head>
 
 <body>
-      <!-- Sección Dispositivo 360 -->
-	  <!-- Subsección X0 -->
-      <h4>X0:</h4>
-      <label for='x0Degrees'>Grados:</label>
-      <input type='text' id='x0Degrees'>
-      <label for='x0Duration'>Duración (s):</label>
-      <input type='text' id='x0Duration'>
-      <input type='number' id='x0Read'>
-      <br>
-      <button onclick="moveMotor('test_360','x0')">Test</button>
-      <button onclick="moveMotor('save_360','x0')">Save</button>
-      <span id="x0Message" style="color: green; display: none;">Movimiento enviado correctamente</span>
-      <br><br>
+  <!-- Sección Dispositivo 360 -->
+  <!-- Subsección X0 -->
+  <h4>X0:</h4>
+  <label for='x0Degrees'>Grados:</label>
+  <input type='text' id='x0Degrees'>
+  <label for='x0Duration'>Duración (s):</label>
+  <input type='text' id='x0Duration'>
+  <input type='number' id='x0Read'>
+  <br>
+  <button onclick="moveMotor('test_360','x0')">Test</button>
+  <button onclick="moveMotor('save_360','x0')">Save</button>
+  <span id="x0Message" style="color: green; display: none;">Movimiento enviado correctamente</span>
+  <br><br>
 
-      <!-- Subsección X1 -->
-      <h4>X1:</h4>
-      <label for='x1Degrees'>Grados:</label>
-      <input type='text' id='x1Degrees'>
-      <label for='x1Duration'>Duración (s):</label>
-      <input type='text' id='x1Duration'>
-      <input type='number' id='x1Read'>
-      <br>
-      <button onclick="moveMotor('test_360','x1')">Test</button>
-      <button onclick="moveMotor('save_360','x1')">Save</button>
-      <span id="x1Message" style="color: green; display: none;">Movimiento enviado correctamente</span>
-      <br><br>
+  <!-- Subsección X1 -->
+  <h4>X1:</h4>
+  <label for='x1Degrees'>Grados:</label>
+  <input type='text' id='x1Degrees'>
+  <label for='x1Duration'>Duración (s):</label>
+  <input type='text' id='x1Duration'>
+  <input type='number' id='x1Read'>
+  <br>
+  <button onclick="moveMotor('test_360','x1')">Test</button>
+  <button onclick="moveMotor('save_360','x1')">Save</button>
+  <span id="x1Message" style="color: green; display: none;">Movimiento enviado correctamente</span>
+  <br><br>
 
-      <!-- Subsección Y0 -->
-      <h4>Y0:</h4>
-      <label for='y0Degrees'>Grados:</label>
-      <input type='text' id='y0Degrees'>
-      <label for='y0Duration'>Duración (s):</label>
-      <input type='text' id='y0Duration'>
-      <input type='number' id='y0Read'>
-      <br>
-      <button onclick="moveMotor('test_360','y0')">Test</button>
-      <button onclick="moveMotor('save_360','y0')">Save</button>
-      <span id="y0Message" style="color: green; display: none;">Movimiento enviado correctamente</span>
-      <br><br>
-      <input type='checkbox' id='syncWithInterval360'> Sincronizar con Intervalómetro
-      <br><br>
+  <!-- Subsección Y0 -->
+  <h4>Y0:</h4>
+  <label for='y0Degrees'>Grados:</label>
+  <input type='text' id='y0Degrees'>
+  <label for='y0Duration'>Duración (s):</label>
+  <input type='text' id='y0Duration'>
+  <input type='number' id='y0Read'>
+  <br>
+  <button onclick="moveMotor('test_360','y0')">Test</button>
+  <button onclick="moveMotor('save_360','y0')">Save</button>
+  <span id="y0Message" style="color: green; display: none;">Movimiento enviado correctamente</span>
+  <br><br>
+  <input type='checkbox' id='syncWithInterval360'> Sincronizar con Intervalómetro
+  <br><br>
   <!-- Script para manejar las interacciones y enviar el JSON -->
   <script>
+
+    function sendHeight() {
+      const height = document.documentElement.scrollHeight || document.body.scrollHeight;
+      window.parent.postMessage(height, "*");
+    }
+
+    window.onload = sendHeight;
+    window.onresize = sendHeight;
+    setInterval(sendHeight, 500); 
+    
     function showMessage(elementId) {
       const messageElement = document.getElementById(elementId);
       if (messageElement) {
